@@ -143,7 +143,6 @@ class Repo:
             cable_2 = int(info[7])
             cable_3 = int(info[8])
             connector = int(info[9])
-            # query = sqlalchemy.update(DProject).values(info) #почти рабочий вариант)) # хз как вставить актуальную дату вторым параметром в info :(
             query = await session.execute(insert(DAddInfo).values(reestr=reestr, date_created=date, city=city,
                                                                   street=street, home=home, apartment=apartment,
                                                                   name=name, cable_1=cable_1, cable_2=cable_2,

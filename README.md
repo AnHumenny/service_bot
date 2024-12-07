@@ -4,8 +4,8 @@ Aiogram3 bot Application
 
 Перед тем как начать, убедитесь, что у вас установлены следующие компоненты:
 
-    Python (версия 3.11)
-    PostgreSQL (версия 14)
+    Python (версия 3.11 или старше)
+    PostgreSQL (версия 14 или старше)
     pip
     virtualenv (опционально)
 
@@ -23,4 +23,5 @@ pip install -r requirements.txt
 
 API_TOKEN = 'TOKEN' host='host' port="port" user="user" password="password" database="database" DATABASE_URL='path_to_database'
 
-##Запуск приложения Чтобы запустить приложение, выполните следующую команду: python3 app.py
+##Запуск приложения 
+Чтобы запустить приложение, выполните следующую команду: python3 app.py

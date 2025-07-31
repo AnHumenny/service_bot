@@ -1,7 +1,7 @@
-import psycopg2
-import base64
-from dotenv import load_dotenv
 import os
+import hashlib
+import psycopg2
+from dotenv import load_dotenv
 
 load_dotenv()
 
@@ -13,11 +13,12 @@ DB_CONFIG = {
     'port': os.getenv('port')
 }
 
+def hashing_password(password: str) -> str:
+    """hashing password."""
+    return hashlib.sha256(password.encode()).hexdigest()
 
 def add_user(login, name, status, password, phone, email, tg_id):
-    # Хешируем пароль в base64
-    ## под настроение запилить в bcrypt
-    encoded_password = base64.b64encode(password.encode()).decode()
+    pswrd = hashing_password(password)
     try:
         conn = psycopg2.connect(**DB_CONFIG)
         cursor = conn.cursor()
@@ -25,7 +26,7 @@ def add_user(login, name, status, password, phone, email, tg_id):
         INSERT INTO _userbot(login, name, status, password, phone, email, tg_id)
         VALUES (%s, %s, %s, %s, %s, %s, %s)
         '''
-        cursor.execute(insert_query, (login, name, status, encoded_password, phone, email, tg_id))
+        cursor.execute(insert_query, (login, name, status, pswrd, phone, email, tg_id))
         conn.commit()
         print("Пользователь добавлен успешно!")
         cursor.close()
@@ -33,13 +34,13 @@ def add_user(login, name, status, password, phone, email, tg_id):
     except Exception as e:
         print(f"Ошибка: {e}")
 
-if __name__ == "__main__":                    #Пользовательские данные для добавления
+if __name__ == "__main__":
     add_user(
-        login="login",
-        name = "name",
-        status = "status",
-        password = "password",
-        phone = "+phone",
+        login="User",
+        name = "Имя пользователя",
+        status = "статус",
+        password = "пароль",
+        phone = "номер телефона",
         email = "email",
-        tg_id = "tg_id"
+        tg_id = "идентификатор tg"
     )

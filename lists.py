@@ -1,8 +1,9 @@
-from dotenv import load_dotenv
 import os
+from dotenv import load_dotenv
 load_dotenv()
 
-helps = ["/help - мануал по боту\n",
+helps = [
+        "/help - мануал по боту\n",
         "/contact - контактная информация\n",
         "/view_azs - посмотреть автозаправки Газпром\n",
         "/view_bs_id - посмотреть БС по номеру\n",
@@ -14,7 +15,8 @@ helps = ["/help - мануал по боту\n",
         "/charts - графики\n",
         "/view_accident - посмотреть инциденты\n",
         "/view_accident_number - посмотреть инциденты номеру\n",
-      #   "/view_tracks - трассы"
+      #   "/view_tracks - трассы\n",  скрыто
+        "/exit - выход",
         ]
 status = ["open", "close", "check"]
 
@@ -22,9 +24,4 @@ block_word = [
     "Гомель", "Минск", "Гродно", "Витебск", "Могилёв", "Брест"
 ]
 
-contact = os.getenv('contact')
-
-log_admin = os.getenv('log_admin')
-id_user = os.getenv('id_user')
-access = os.getenv('access')
-
+contact = os.getenv('CONTACT')

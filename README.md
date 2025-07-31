@@ -1,27 +1,60 @@
-Aiogram3 bot Application
+# Aiogram3 Bot Application
 
-Приложение предназначено для обработки рабочей информации, хранящейся в БД приложения, а так же обновления и добавления новых заявок, отображения информации из БД в графиках. Использует PostgreSQL в качестве базы данных.
+Приложение предназначено для обработки рабочей информации, хранящейся в базе данных основного проекта, а также для обновления и добавления новых заявок и отображения информации в виде графиков. Используетс Redis. В качестве базы данных используется **PostgreSQL**.
 
-Перед тем как начать, убедитесь, что у вас установлены следующие компоненты:
+## Требования
 
-    Python (версия 3.11 или старше)
-    PostgreSQL (версия 14 или старше)
-    pip
-    virtualenv (опционально)
+Перед началом работы убедитесь, что у вас установлены следующие компоненты:
 
-Установка
+- **Python** (версия 3.12 или выше)
+- **PostgreSQL** (версия 14 или выше)
+- **pip**
+- **virtualenv** (опционально, для создания виртуального окружения)
 
+## Установка
+
+1. **Создайте виртуальное окружение** (рекомендуется):
+
+    ```bash
     python -m venv venv
-    source venv/bin/activate # Для macOS/Linux
-    venv\Scripts\activate # Для Windows
 
-Установите зависимости:
 
-pip install -r requirements.txt
+2. **Активируйте виртуальное окружение**:
 
-Настройте базу данных: Создайте базу данных в PostgreSQL и обновите настройки в .env вашего проекта:
+    ```bash
+    Для macOS/Linux:
+    bashsource venv/bin/activate
 
-API_TOKEN = 'TOKEN' host='host' port="port" user="user" password="password" database="database" DATABASE_URL='path_to_database'
+    Для Windows:
+    bashvenv\Scripts\activate
 
-##Запуск приложения 
-Чтобы запустить приложение, выполните следующую команду: python3 app.py
+3. **Установите зависимости**:
+    ```bash
+    pip install -r requirements.txt
+
+### Настройка базы данных
+
+1. **Создайте базу данных в PostgreSQL**.
+
+#### Настройте параметры подключения в файле .env вашего проекта. Пример содержимого файла .env
+- **TELEGRAM_BOT_TOKEN='YOUR_TELEGRAM_BOT_TOKEN'**
+- **SECRET_KEY='YOUR_SECRET_KEY'**
+- **host='YOUR_DB_HOST'**
+- **port='YOUR_DB_PORT'**
+- **user='YOUR_DB_USER'**
+- **password='YOUR_DB_PASSWORD'**
+- **database='YOUR_DB_NAME'**
+- **DATABASE_URL='postgresql://user:password@host:port/database'**
+- **CONTACT='Список контактов'**
+- **PATH_TO_CLUSTER_1="Трассы кластер 1"**
+- **PATH_TO_CLUSTER_2="Трассы кластер 2"**
+- **PATH_TO_CLUSTER_3="Трассы кластер 3"**
+- **PATH_TO_CLUSTER_4="Трассы кластер 4"**
+- **PATH_TO_CLUSTER_5="Трассы кластер 5"**
+- 
+1. **Замените значения на соответствующие для вашего окружения**.
+
+
+### Запуск приложения
+#### Для запуска приложения выполните следующую команду:
+    python3 app.py

@@ -11,14 +11,14 @@ helps = [
         "/view_all_info - посмотреть данные fttx\n",
         "/view_man - посмотреть manual\n",
         "/add_new_info - добавить в info\n",
+        "/view_accident - посмотреть инциденты по статусу\n",
+        "/view_accident_number - посмотреть инциденты номеру\n",
         "/update_accident - обновить инцидент по номеру\n",
         "/charts - графики\n",
-        "/view_accident - посмотреть инциденты\n",
-        "/view_accident_number - посмотреть инциденты номеру\n",
-      #   "/view_tracks - трассы\n",  скрыто
+        "/view_tracks - трассы\n",
+     #   "/view_stat - посмотреть статистику\n",
         "/exit - выход",
         ]
-status = ["open", "close", "check"]
 
 block_word = [
     "Гомель", "Минск", "Гродно", "Витебск", "Могилёв", "Брест"

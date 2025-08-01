@@ -172,6 +172,24 @@ class Repo:
             return answer
 
     @classmethod
+    async def select_type_manual(cls):
+        """Select model of manual."""
+        async with new_session() as session:
+            query = select(DManual.model)
+            result = await session.execute(query)
+            answer = result.scalars().all()
+            return answer
+
+    @classmethod
+    async def select_type_accident(cls):
+        """Select status of accident."""
+        async with new_session() as session:
+            query = select(DAccident.status).distinct()
+            result = await session.execute(query)
+            answer = result.scalars().all()
+            return answer
+
+    @classmethod
     async def exit_user_bot(cls, tg_id):
         """Exit."""
         async with new_session() as session:

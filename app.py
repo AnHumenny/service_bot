@@ -1,19 +1,14 @@
 import asyncio
-from redis.asyncio import Redis
+from itertools import zip_longest
 
-import random
-from collections import OrderedDict
+from redis.asyncio import Redis
 
 from datetime import datetime, timedelta, timezone
 import hashlib
-import logging
 import os
 from functools import wraps
 
 import jwt
-import matplotlib.pyplot as plt
-import psycopg2
-import pytz
 from html2markdown import convert
 
 from aiogram import Bot, Dispatcher, F, types
@@ -25,6 +20,7 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder
 from aiogram.utils.markdown import hlink
 from aiogram.fsm.storage.redis import RedisStorage
 
+import graph
 import keyboards
 import lists
 from repository import Repo
@@ -32,24 +28,8 @@ from repository import Repo
 from dotenv import load_dotenv
 load_dotenv()
 
-
-class SelectInfo(StatesGroup):
-    view_all_fttx = State()
-    register_user = State()
-    view_azs = State()
-    view_man = State()
-    view_bs_number = State()
-    view_bs_address = State()
-    view_action = State()
-    select_action = State()
-    view_accident = State()
-    exit_exit = State()
-    add_new_info = State()
-    update_accident = State()
-
-
-class Registred:
-    name = None
+import logging
+logger = logging.getLogger(__name__)
 
 logging.basicConfig(level=logging.INFO)
 bot = Bot(token=os.getenv('TELEGRAM_BOT_TOKEN'))
@@ -63,9 +43,27 @@ class AuthStates(StatesGroup):
     waiting_for_login = State()
     waiting_for_password = State()
 
+class SelectInfo(StatesGroup):
+    """FSM StatesGroup for managing user states when interacting with a bot."""
+    view_all_fttx = State()
+    register_user = State()
+    view_azs = State()
+    view_man = State()
+    view_bs_number = State()
+    view_bs_address = State()
+    view_action = State()
+    select_action = State()
+    view_accident = State()
+    exit_exit = State()
+    add_new_info = State()
+    update_accident = State()
+
+class Registred:
+    """User name"""
+    name = None
 
 class Info:
-    """Variables for throwing"""
+    """Login Attempt Counter"""
     count = 0
 
 
@@ -84,10 +82,10 @@ async def decode_jwt_token(token):
         decoded_data = jwt.decode(token, os.getenv("SECRET_KEY"), algorithms=['HS256'])
         return decoded_data
     except jwt.ExpiredSignatureError:
-        print("Token has expired.")
+        logger.error("[ERROR]Token has expired.")
         return None
     except jwt.InvalidTokenError:
-        print("Invalid token.")
+        logger.error("[ERROR]Invalid token.")
         return None
 
 
@@ -159,9 +157,8 @@ async def process_password(message: types.Message, state: FSMContext):
         }
 
         token = await create_jwt_token(user_payload)
-        Registred.user = result.name
+        Registred.name = result.name
         await state.update_data(jwt_token=token, chat_id=message.chat.id)
-
         await state.clear()
         await state.update_data(jwt_token=token)
         await message.answer(
@@ -177,16 +174,6 @@ async def process_password(message: types.Message, state: FSMContext):
 async def cmd_start(message: types.Message, state: FSMContext):
     """help"""
     await message.answer("".join(lists.helps))
-
-
-@dp.message(Command("exit"))
-@token_required
-async def cmd_logout(message: types.Message, state: FSMContext):
-    """exit"""
-    await state.clear()
-    tg_id = message.from_user.id
-    await Repo.exit_user_bot(tg_id)
-    await message.answer("Вы вышли из системы. Чтобы снова войти, используйте /start.")
 
 
 @dp.message(F.text, Command('contact'))
@@ -268,7 +255,6 @@ async def view_all_fttx(msg: Message, state: FSMContext):
                                                                     f"{answer.street} {answer.number}")
                 await state.clear()
             else:
-                print('Пустой запрос')
                 await msg.answer(text=f"что то не то с адресом :(")
                 return
 
@@ -351,12 +337,13 @@ async def update_accident(msg: Message, state: FSMContext):
 @token_required
 async def view_accident(msg: Message, state: FSMContext):
     """Result close incident by number"""
+    status = Repo.select_type_accident()
     info = msg.text.split('|')
     if len(info) != 3:
         await msg.answer(f"Что-то не так с данными :(")
         await state.clear()
         return
-    if info[1] not in lists.status:
+    if info[1] not in status:
         await msg.answer(f"Введён некорректный статус заявки")
         await state.clear()
         return
@@ -407,7 +394,7 @@ async def select_bs_ad(msg: Message, state: FSMContext):
         if answer is not None:
             for row in answer:
                 await msg.answer(f"\n{row.number} \n{row.address} \n{row.comment}  ")
-            await Repo.insert_into_visited_date(Registred.name, f"посмотрел Основные команды d-link")
+                await Repo.insert_into_visited_date(Registred.name, f"Посмотрел данные по БС {row.number}")
             await state.clear()
         if answer is None:
             await msg.answer(text=f"Нет такой БС :(")
@@ -432,7 +419,7 @@ async def view_action_select(msg: Message, state: FSMContext):
 async def select_action_user(msg: Message, state: FSMContext):
     """Result latest user requests"""
     if msg.text is None:
-        await msg.answer(f"Фигня  с данными :(")
+        await msg.answer(f"Некорректные данные :(")
         await state.clear()
         return
     else:
@@ -453,235 +440,92 @@ async def select_action_user(msg: Message, state: FSMContext):
 
 @dp.message(Command("view_man"))
 @token_required
-async def cmd_random(message: types.Message, state: FSMContext):
-    """View manual"""
+async def view_man(message: types.Message, state: FSMContext):
+    manuals = await Repo.select_type_manual()
+    await state.update_data(manuals=manuals)
     builder = InlineKeyboardBuilder()
-    builder.add(types.InlineKeyboardButton(
-        text="HUAWEI-5100",
-        callback_data="1")
-    )
-    builder.add(types.InlineKeyboardButton(
-        text="Ubiquti",
-        callback_data="2")
-    )
-    builder.row(types.InlineKeyboardButton(
-        text="D-Link DGS-3000/3120",
-        callback_data="3")
-    )
-    builder.add(types.InlineKeyboardButton(
-        text="Cisco точки доступа ",
-        callback_data="4")
-    )
-    builder.row(types.InlineKeyboardButton(
-        text="Mikrotik 3G стартовая конфигурация",
-        callback_data="5")
-    )
-    builder.row(types.InlineKeyboardButton(
-        text="MikroTik 3G/4G сеть",
-        callback_data="6")
-    )
-    builder.add(types.InlineKeyboardButton(
-        text="MikroTik FTTX",
-        callback_data="7")
-    )
-    builder.row(types.InlineKeyboardButton(
-        text="Основные команды d-link",
-        callback_data="8")
-    )
-    builder.row(types.InlineKeyboardButton(
-        text="Huawei вход через boot-menu",
-        callback_data="9")
-    )
-    await message.answer(
-         "Что надо?",
-        reply_markup=builder.as_markup()
-    )
+    for left, right in zip_longest(manuals[::2], manuals[1::2]):
+        buttons = []
+        if left:
+            buttons.append(types.InlineKeyboardButton(text=left, callback_data=f"manual:{left}"))
+        if right:
+            buttons.append(types.InlineKeyboardButton(text=right, callback_data=f"manual:{right}"))
+        builder.row(*buttons)
+
+    await message.answer("Что надо?", reply_markup=builder.as_markup())
 
 
-@dp.callback_query(F.data == "1")
-@token_required
-async def send_random_value(callback: types.CallbackQuery, state: FSMContext):
-    """View info Huawei."""
-    answer = await Repo.select_manual(int(1))
-    await Repo.insert_into_visited_date(Registred.name, f"посмотрел man по Huawei-5100")
+@dp.callback_query(lambda c: c.data.startswith("manual:"), token_required)
+async def send_manual_value(callback: types.CallbackQuery, state: FSMContext):
+    manual_name = callback.data[len("manual:"):]
+    data = await state.get_data()
+    manuals = data.get("manuals")
+    if not manuals:
+        await callback.message.answer("Не удалось загрузить список мануалов.")
+        return
+    try:
+        manual_index = manuals.index(manual_name)
+    except ValueError:
+        await callback.message.answer("Выбранное руководство не найдено.")
+        return
+    answer = await Repo.select_manual(manual_index + 1)
+    await Repo.insert_into_visited_date(Registred.name, f"посмотрел man по {manual_name}")
     model = answer.model
     description = convert(answer.description)
-    await callback.message.answer(f"{model} \n {description}")
-
-
-@dp.callback_query(F.data == "2")
-@token_required
-async def send_random_value(callback: types.CallbackQuery, state: FSMContext):
-    """View info Ubiquti."""
-    answer = await Repo.select_manual(2)
-    await Repo.insert_into_visited_date(Registred.name, f"посмотрел данные по Ubiquti")
-    model = answer.model
-    description = convert(answer.description)
-    await callback.message.answer(f"{model} \n {description}")
-
-
-@dp.callback_query(F.data == "3")
-@token_required
-async def send_random_value(callback: types.CallbackQuery, state: FSMContext):
-    """View info D-Link."""
-    answer = await Repo.select_manual(3)
-    await Repo.insert_into_visited_date(Registred.name, f"посмотрел данные по D-Link DGS-3000/3120")
-    model = answer.model
-    description = convert(answer.description)
-    await callback.message.answer(f"{model} \n {description}")
-
-
-@dp.callback_query(F.data == "4")
-@token_required
-async def send_random_value(callback: types.CallbackQuery, state: FSMContext):
-    """View info Cisco."""
-    answer = await Repo.select_manual(4)
-    await Repo.insert_into_visited_date(Registred.name, f"посмотрел данные по Cisco точки доступа")
-    model = convert(answer.model)
-    description = convert(answer.description)
-    await callback.message.answer(f"{model} \n {description}")
-
-
-@dp.callback_query(F.data == "5")
-@token_required
-async def send_random_value(callback: types.CallbackQuery, state: FSMContext):
-    """View info Mikrotik 3G."""
-    answer = await Repo.select_manual(5)
-    await Repo.insert_into_visited_date(Registred.name, f"посмотрел данные по Mikrotik 3G стартовая конфигурация")
-    model = answer.model
-    description = convert(answer.description)
-    await callback.message.answer(f"{model} \n {description}")
-
-
-@dp.callback_query(F.data == "6")
-@token_required
-async def send_random_value(callback: types.CallbackQuery, state: FSMContext):
-    """View info MikroTik 3G/4G."""
-    answer = await Repo.select_manual(6)
-    await Repo.insert_into_visited_date(Registred.name, f"MikroTik 3G/4G сеть")
-    model = answer.model
-    description = convert(answer.description)
-    await callback.message.answer(f"{model} \n {description}")
-
-
-@dp.callback_query(F.data == "7")
-@token_required
-async def send_random_value(callback: types.CallbackQuery, state: FSMContext):
-    """View info MikroTik FTTХ."""
-    answer = await Repo.select_manual(7)
-    await Repo.insert_into_visited_date(Registred.name, f"посмотрел данные по MikroTik FTTХ")
-    model = answer.model
-    description = convert(answer.description)
-    await callback.message.answer(f"{model} \n {description}")
-
-
-@dp.callback_query(F.data == "8")
-@token_required
-async def send_random_value(callback: types.CallbackQuery, state: FSMContext):
-    """View info Basic d-link commands."""
-    answer = await Repo.select_manual(8)
-    await Repo.insert_into_visited_date(Registred.name, f"посмотрел Основные команды d-link")
-    model = answer.model
-    description = convert(answer.description)
-    await callback.message.answer(f"{model} \n {description}")
-
-
-@dp.callback_query(F.data == "9")
-@token_required
-async def send_random_value(callback: types.CallbackQuery, state: FSMContext):
-    """View info Basic d-link commands."""
-    answer = await Repo.select_manual(9)
-    await Repo.insert_into_visited_date(Registred.name, f"посмотрел Huawei login via boot-menu")
-    model = answer.model
-    description = convert(answer.description)
-    await callback.message.answer(f"{model} \n {description}")
+    await callback.message.answer(f"{model} \n{description}")
 
 
 @dp.message(Command("view_accident"))
 @token_required
-async def cmd_random(message: types.Message, state: FSMContext):
+async def view_accident(message: types.Message, state: FSMContext):
     """Search accident by status."""
+    type_of_accident = await Repo.select_type_accident()
     builder = InlineKeyboardBuilder()
-    builder.add(types.InlineKeyboardButton(
-        text="Открытые инциденты",
-        callback_data="open")
-    )
-    builder.add(types.InlineKeyboardButton(
-        text="В статусе проверки",
-        callback_data="check")
-    )
-    builder.row(types.InlineKeyboardButton(
-        text="Закрытые инциденты",
-        callback_data="close")
-    )
-    builder.row(types.InlineKeyboardButton(
-        text="Посмотреть статистику изменений",
-        callback_data="stat")
-    )
+
+    for left, right in zip_longest(type_of_accident[::2], type_of_accident[1::2]):
+        buttons = []
+        if left:
+            buttons.append(types.InlineKeyboardButton(text=f"Инцидент: {left}", callback_data=f"accident:{left}"))
+        if right:
+            buttons.append(types.InlineKeyboardButton(text=f"Инцидент: {right}", callback_data=f"accident:{right}"))
+        builder.row(*buttons)
+
     await message.answer(
         "варианты запроса",
         reply_markup=builder.as_markup()
     )
 
-
-@dp.callback_query(F.data == "open")
+@dp.callback_query(lambda c: c.data.startswith("accident:"))
 @token_required
-async def send_random_value(callback: types.CallbackQuery, state: FSMContext):
-    """View accident by status Open."""
-    answer = await Repo.select_accident("open")
-    await Repo.insert_into_visited_date(Registred.name, f"посмотрел открытые заявки ")
+async def view_status_accident(callback: types.CallbackQuery, state: FSMContext):
+    """View accident by status."""
+    type_of_accident = callback.data.split(":")[1]
+
+    answer = await Repo.select_accident(type_of_accident)
+    await Repo.insert_into_visited_date(Registred.name, f"Посмотрел заявки в статусе {type_of_accident}")
+
     for row in answer:
-        await callback.message.answer(f"Номер:  {row.number} \nКатегория:  {row.category} "
-                                      f"\nСрок ликвидации:  {row.sla}, \nВремя открытия:  {row.datetime_open},"
-                                      f"\nОписание проблемы:  {row.problem},"
-                                      f"\nГород:  {row.city}, \nАдрес:  {row.address},"
-                                      f"\nФИО:  {row.name},  \nТелефон: +{row.phone},"
-                                      f"\nАбонентский номер:  {row.subscriber}, \nКомментарий:  {row.comment},"
-                                      f"\nРешение:  {row.decide}, \nСтатус заявки:  {row.status} ")
+        await callback.message.answer(
+            f"Номер:  {row.number} \nКатегория:  {row.category} "
+            f"\nСрок ликвидации:  {row.sla}, \nВремя открытия:  {row.datetime_open},"
+            f"\nОписание проблемы:  {row.problem},"
+            f"\nГород:  {row.city}, \nАдрес:  {row.address},"
+            f"\nФИО:  {row.name},  \nТелефон: +{row.phone},"
+            f"\nАбонентский номер:  {row.subscriber}, \nКомментарий:  {row.comment},"
+            f"\nРешение:  {row.decide}, \nСтатус заявки:  {row.status} "
+        )
 
 
-@dp.callback_query(F.data == "check")
+@dp.message(Command("view_stat"))
 @token_required
-async def send_random_value(callback: types.CallbackQuery, state: FSMContext):
-    """View accident by status Check."""
-    answer = await Repo.select_accident("check")
-    await Repo.insert_into_visited_date(Registred.name, f"посмотрел заявки в статусе проверки")
-    for row in answer:
-        await callback.message.answer(f"Номер:  {row.number} \nКатегория:  {row.category} "
-                                      f"\nСрок ликвидации:  {row.sla}, \nВремя открытия:  {row.datetime_open},"
-                                      f"\nОписание проблемы:  {row.problem},"
-                                      f"\nГород:  {row.city}, \nАдрес:  {row.address},"
-                                      f"\nФИО:  {row.name},  \nТелефон: +{row.phone},"
-                                      f"\nАбонентский номер:  {row.subscriber}, \nКомментарий:  {row.comment},"
-                                      f"\nРешение:  {row.decide}, \nСтатус заявки:  {row.status} ")
-
-
-@dp.callback_query(F.data == "close")
-@token_required
-async def send_random_value(callback: types.CallbackQuery, state: FSMContext):
-    """View accident by status Close."""
-    answer = await Repo.select_accident("close")
-    await Repo.insert_into_visited_date(Registred.name, f"посмотрел заявки в статусе закрыто")
-    for row in answer:
-        await callback.message.answer(f"Номер:  {row.number} \nКатегория:  {row.category} "
-                                      f"\nСрок ликвидации:  {row.sla}, \nВремя открытия:  {row.datetime_open},"
-                                      f"\nВремя закрытия:  {row.datetime_close}, \nОписание проблемы:  {row.problem},"
-                                      f"\nГород:  {row.city}, \nАдрес:  {row.address},"
-                                      f"\nФИО:  {row.name},  \nТелефон: +{row.phone},"
-                                      f"\nАбонентский номер:  {row.subscriber}, \nКомментарий:  {row.comment},"
-                                      f"\nРешение:  {row.decide}, \nСтатус заявки:  {row.status} ")
-
-
-@dp.callback_query(F.data == "stat")
-@token_required
-async def send_random_value(callback: types.CallbackQuery, state: FSMContext):
-    """View last 10 incident requests."""
+async def view_stat(message: types.Message, state: FSMContext):
+    """View action statistics."""
     answer = await Repo.select_stat()
     await Repo.insert_into_visited_date(Registred.name, f"посмотрел последние 10 заявок по инцидентам")
     for row in answer:
-        await callback.message.answer(f"Номер:  {row.id} \nКто заходил:  {row.login} "
+        await message.answer(f"Номер:  {row.id} \nКто заходил:  {row.login} "
                                       f"\nДата:  {row.date_created}, \nДействие:  {row.action}"
-                                      )
+                             )
 
 
 @dp.message(StateFilter(None), Command("view_accident_number"))
@@ -723,95 +567,19 @@ async def insert_accident_number(msg: Message, state: FSMContext):
         return
 
 
-async def create_chart(temp):
-    """Create graph."""
-    result_query = dict()
-    list_query = []
-    set_street = set()
-    tmz = pytz.timezone('Europe/Moscow')
-    end_date = datetime.now(tmz)
-    start_date = datetime(end_date.year, 1, 1)
-    conn = psycopg2.connect(host=os.getenv("host"), port=os.getenv("port"), user=os.getenv("user"),
-                            password=os.getenv("password"), database=os.getenv("database"))
-    plt.figure(figsize=(25, 18))
-    with conn.cursor() as cursor:
-        query = "SELECT DISTINCT street FROM info_info WHERE date_created BETWEEN %s AND %s"
-        cursor.execute(query, (start_date, end_date))
-        result = cursor.fetchall()
-        for row in result:
-            set_street.add(*row)
-        sorted_street = sorted(set_street)
-        for query, row in enumerate(sorted_street):
-            cursor = conn.cursor()
-            query = "SELECT street FROM info_info WHERE date_created BETWEEN %s AND %s AND street = %s "
-            cursor.execute(query, (start_date, end_date, row))
-            result = cursor.fetchall()
-            for rows in result:
-                result_query[rows] = result_query.get(rows, 0) + 1
-            list_query = [[key, value] for key, value in result_query.items()]
-        plt.minorticks_on()
-        plt.grid(which='major')
-        plt.grid(which='minor', linestyle='-.')
-        plt.tight_layout()
-        plt.xlabel('Ось X', labelpad=80)
-        plt.ylabel('Ось Y', labelpad=80)
-        plt.title(str(end_date), pad=20)
-        plt.tight_layout()
-        if temp == 'bar':
-            d = OrderedDict(sorted(list_query, key=lambda x: x[0]))
-            values = list(d.values())
-            plt.bar(range(len(d)), values, color='purple',
-                    tick_label=sorted_street)
-            axes = plt.subplot(1, 1, 1)
-            axes.tick_params(axis='x', labelrotation=55)
-        if temp == 'gorizontal':
-            d = OrderedDict(sorted(list_query, key=lambda x: x[0]))
-            values = list(d.values())
-            plt.barh(range(len(d)), values, tick_label=sorted_street)
-        if temp == 'ring':
-            list_explode = []
-            d = OrderedDict(sorted(list_query, key=lambda x: x[0]))
-            values = list(d.values())
-            for row in range(len(list_query)):
-                list_explode.append(round(random.random() / 3, 4))
-            plt.pie(values, labels=sorted_street, autopct='%1.1f%%',
-                    explode=list_explode, rotatelabels=False)
-        if temp == 'pie':
-            list_explode = []
-            d = OrderedDict(sorted(list_query, key=lambda x: x[0]))
-            values = list(d.values())
-            for row in range(len(list_query)):
-                list_explode.append(round(random.random() / 3, 4))
-            plt.pie(values, labels=sorted_street, autopct='%1.1f%%',
-                    explode=list_explode, rotatelabels=False, shadow=False, wedgeprops=dict(width=0.5))
-    chart_path = 'chart.png'
-    plt.savefig(chart_path)
-    plt.close()
-    cursor.close()
-    return chart_path
-
-
 @dp.message(Command("charts"))
 @token_required
-async def cmd_random(message: types.Message, state: FSMContext):
+async def charts(message: types.Message, state: FSMContext):
     """Request to create a graph."""
+    types_of_graph = ["bar", "pie", "gorizontal", "ring"]
     builder = InlineKeyboardBuilder()
-    builder.add(types.InlineKeyboardButton(
-        text="chart BAR",
-        callback_data="bar")
-    )
-    builder.row(types.InlineKeyboardButton(
-        text="chart Gorizontal",
-        callback_data="gorizontal")
-    )
-    builder.add(types.InlineKeyboardButton(
-        text="chart Ring",
-        callback_data="ring")
-    )
-    builder.row(types.InlineKeyboardButton(
-        text="chart PIE",
-        callback_data="pie")
-    )
+    for left, right in zip_longest(types_of_graph[::2], types_of_graph[1::2]):
+        buttons = []
+        if left:
+            buttons.append(types.InlineKeyboardButton(text=f"График: {left}", callback_data=left))
+        if right:
+            buttons.append(types.InlineKeyboardButton(text=f"График: {right}", callback_data=right))
+        builder.row(*buttons)
 
     await message.answer(
         "Что смотрим?",
@@ -819,85 +587,32 @@ async def cmd_random(message: types.Message, state: FSMContext):
     )
 
 
-@dp.callback_query(F.data == "pie")
+@dp.callback_query(lambda c: c.data in ["bar", "pie", "gorizontal", "ring"])
 @token_required
-async def send_current_graf(callback: types.CallbackQuery, state: FSMContext):
-    """Result graph PIE."""
-    await Repo.insert_into_visited_date(Registred.name, f"посмотрел график PIE")
-    temp = "pie"
-    chart_path = await create_chart(temp)
-    with open(chart_path, 'rb') as file:
-        photo = BufferedInputFile(file.read(), 'круговая диаграмма')
-        await callback.message.answer_photo(photo)
-    os.remove(chart_path)
-
-
-@dp.callback_query(F.data == "gorizontal")
-async def send_current_graf(callback: types.CallbackQuery, state: FSMContext):
-    """Result graph Gorizontal."""
-    await Repo.insert_into_visited_date(Registred.name, f"посмотрел график Gorizontal")
-    temp = "gorizontal"
-    chart_path = await create_chart(temp)
-    with open(chart_path, 'rb') as file:
-        photo = BufferedInputFile(file.read(), 'круговая диаграмма')
-        await callback.message.answer_photo(photo)
-    os.remove(chart_path)
-
-
-@dp.callback_query(F.data == "ring")
-@token_required
-async def send_current_graf(callback: types.CallbackQuery, state: FSMContext):
-    """Result graph RING."""
-    await Repo.insert_into_visited_date(Registred.name, f"посмотрел график RING")
-    temp = "ring"
-    chart_path = await create_chart(temp)
-    with open(chart_path, 'rb') as file:
-        photo = BufferedInputFile(file.read(), 'круговая диаграмма')
-        await callback.message.answer_photo(photo)
-    os.remove(chart_path)
-
-
-@dp.callback_query(F.data == "bar")
-@token_required
-async def send_current_graf(callback: types.CallbackQuery, state: FSMContext):
-    """Result graph BAR."""
-    await Repo.insert_into_visited_date(Registred.name, f"посмотрел график BAR")
-    temp = "bar"
-    chart_path = await create_chart(temp)
-    with open(chart_path, 'rb') as file:
-        photo = BufferedInputFile(file.read(), 'круговая диаграмма')
-        await callback.message.answer_photo(photo)
-    os.remove(chart_path)
-
+async def send_chart(callback: types.CallbackQuery, state: FSMContext):
+    """Send selected chart image."""
+    chart_type = callback.data
+    await Repo.insert_into_visited_date(Registred.name, f"посмотрел график {chart_type}")
+    chart_path = await graph.create_chart(chart_type)
+    try:
+        with open(chart_path, 'rb') as file:
+            photo = BufferedInputFile(file.read(), f'{chart_type}.png')
+            await callback.message.answer_photo(photo)
+    finally:
+        os.remove(chart_path)
 
 # недокументированный запрос(скрыт в lists)
 @dp.message(Command("view_tracks"))
 @token_required
-async def cmd_random(message: types.Message, state: FSMContext):
+async def view_routes(message: types.Message, state: FSMContext):
     """View routes."""
     builder = InlineKeyboardBuilder()
 
-    builder.row(types.InlineKeyboardButton(
-        text=os.getenv("PATH_TO_CLUSTER_1"),
-        callback_data="fttx_1")
-    )
-    builder.row(types.InlineKeyboardButton(
-        text=os.getenv("PATH_TO_CLUSTER_2"),
-        callback_data="fttx_2")
-    )
-    builder.row(types.InlineKeyboardButton(
-        text=os.getenv("PATH_TO_CLUSTER_3"),
-        callback_data="fttx_3")
-    )
-    builder.row(types.InlineKeyboardButton(
-        text=os.getenv("PATH_TO_CLUSTER_4"),
-        callback_data="fttx_4")
-    )
-
-    builder.row(types.InlineKeyboardButton(
-        text=os.getenv("PATH_TO_CLUSTER_5"),
-        callback_data="fttx_5")
-    )
+    for i in range(1, 6):
+        builder.row(types.InlineKeyboardButton(
+            text=os.getenv(f"PATH_TO_CLUSTER_{i}"),
+            callback_data=f"fttx_{i}")
+        )
 
     await message.answer(
         "Что надо?",
@@ -905,58 +620,28 @@ async def cmd_random(message: types.Message, state: FSMContext):
     )
 
 
-@dp.callback_query(F.data == "fttx_1")
+@dp.callback_query(lambda c: c.data and c.data.startswith("fttx_"))
 @token_required
-async def send_current_graf(callback: types.CallbackQuery, state: FSMContext):
-    """Route to fttx cluster 1 search result."""
-    with open(f'{os.getcwd()}/image/fttx_1.png', 'rb') as file:
-        photo = BufferedInputFile(file.read(), 'any_filename')
-    await callback.message.answer_photo(photo)
-
-
-@dp.callback_query(F.data == "fttx_2")
-@token_required
-async def send_current_graf(callback: types.CallbackQuery, state: FSMContext):
-    """Route to fttx cluster 2 search result."""
-    with open(f'{os.getcwd()}/image/fttx_2.png', 'rb') as file:
-        photo = BufferedInputFile(file.read(), 'any_filename')
-    await callback.message.answer_photo(photo)
-
-
-@dp.callback_query(F.data == "fttx_3")
-@token_required
-async def send_current_graf(callback: types.CallbackQuery, state: FSMContext):
-    """Route to fttx cluster 3 search result."""
-    with open(f'{os.getcwd()}/image/fttx_3.png', 'rb') as file:
-        photo = BufferedInputFile(file.read(), 'any_filename')
-    await callback.message.answer_photo(photo)
-
-
-@dp.callback_query(F.data == "fttx_4")
-@token_required
-async def send_current_graf(callback: types.CallbackQuery, state: FSMContext):
-    """Route to fttx cluster 4 search result."""
-    with open(f'{os.getcwd()}/image/fttx_4.png', 'rb') as file:
-        photo = BufferedInputFile(file.read(), 'any_filename')
-    await callback.message.answer_photo(photo)
-
-
-@dp.callback_query(F.data == "fttx_5")
-@token_required
-async def send_current_graf(callback: types.CallbackQuery, state: FSMContext):
-    """Route to fttx cluster 5 search result."""
-    with open(f'{os.getcwd()}/image/fttx_5.png', 'rb') as file:
-        photo = BufferedInputFile(file.read(), 'any_filename')
-    await callback.message.answer_photo(photo)
+async def view_tracks(callback: types.CallbackQuery, state: FSMContext):
+    cluster_number = callback.data.split("_")[1]
+    image_path = f'{os.getcwd()}/image/fttx_{cluster_number}.png'
+    try:
+        with open(image_path, 'rb') as file:
+            photo = BufferedInputFile(file.read(), 'any_filename.png')
+        await callback.message.answer_photo(photo)
+    except FileNotFoundError:
+        await callback.message.answer(f"Изображение fttx_{cluster_number} не найдено.")
 # end недокументированный запрос
 
 
 @dp.message(Command("exit"))
+@token_required
 async def cmd_logout(message: types.Message, state: FSMContext):
-    """Exit"""
+    """exit"""
     await state.clear()
     tg_id = message.from_user.id
     await Repo.exit_user_bot(tg_id)
+    Registred.name = None
     await message.answer("Вы вышли из системы. Чтобы снова войти, используйте /start.")
 
 

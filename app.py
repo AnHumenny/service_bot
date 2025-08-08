@@ -57,6 +57,8 @@ class SelectInfo(StatesGroup):
     exit_exit = State()
     add_new_info = State()
     update_accident = State()
+    view_key = State()
+    view_old_subscribers = State()
 
 class Registred:
     """User name"""
@@ -200,7 +202,7 @@ async def select_azs(msg: Message, state: FSMContext):
     """Result search"""
     if msg.text is None:
         await msg.answer(f"Некорректные данные :(")
-        await state.clear()
+        await state.set_state(None)
         return
     else:
         number = msg.text.strip()
@@ -213,7 +215,7 @@ async def select_azs(msg: Message, state: FSMContext):
                 response = hlink('Яндекс-карта', f'https://yandex.by/maps/?ll={answer.geo}&z=16')
                 await msg.answer(f"{response}")
                 await Repo.insert_into_visited_date(Registred.name, f"посмотрел данные по АЗС - {number}")
-                await state.clear()
+                await state.set_state(None)
             except AttributeError:
                 await msg.answer(text=f"Нет такой АЗС :(")
                 return
@@ -236,14 +238,14 @@ async def view_all_fttx(msg: Message, state: FSMContext):
     """Result fttx."""
     if msg.text is None:
         await msg.answer(f"Некорректные данные :(")
-        await state.clear()
+        await state.set_state(None)
         return
     else:
         temps = msg.text.strip()
         temp = [[temps[0]], [temps[1]], [temps[2]]]
         if len(temp) != 3:
             await msg.answer(f"Некорректные данные  :(")
-            await state.clear()
+            await state.set_state(None)
             return
         else:
             answer = await Repo.select_all_info(temps)
@@ -253,7 +255,7 @@ async def view_all_fttx(msg: Message, state: FSMContext):
                                  f"{answer.description} \n АСКУЭ: {answer.askue}")
                 await Repo.insert_into_visited_date(Registred.name, f"посмотрел данные по {answer.city} "
                                                                     f"{answer.street} {answer.number}")
-                await state.clear()
+                await state.set_state(None)
             else:
                 await msg.answer(text=f"что то не то с адресом :(")
                 return
@@ -276,18 +278,19 @@ async def select_bs_id(msg: Message, state: FSMContext):
     """Result search BS"""
     if msg.text is None:
         await msg.answer(f"Ошибка вводных данных :(")
-        await state.clear()
+        await state.set_state(None)
         return
     else:
         number = msg.text.strip()
         answer = await Repo.select_bs_number(number)
-        await msg.answer(f"{answer.number}\n{answer.address}\n{answer.comment}")
-        await Repo.insert_into_visited_date(Registred.name, f"посмотрел данные по БС - {number}")
-        await state.clear()
         if answer is None:
             await msg.answer(text=f"Нет такой БС :(")
-            await state.clear()
+            await state.set_state(None)
             return
+        else:
+            await msg.answer(f"{answer.number}\n{answer.address}\n{answer.comment}")
+            await Repo.insert_into_visited_date(Registred.name, f"посмотрел данные по БС - {number}")
+            await state.set_state(None)
         return
 
 
@@ -309,7 +312,7 @@ async def insert_new_info(msg: Message, state: FSMContext):
     info = msg.text.split('|')
     if len(info) != 10:  # или быстрый выход
         await msg.answer(f"Что-то не так с данными :(")
-        await state.clear()
+        await state.set_state(None)
         return
     else:
         query = await Repo.insert_info(info)
@@ -318,7 +321,7 @@ async def insert_new_info(msg: Message, state: FSMContext):
             await Repo.insert_into_visited_date(Registred.name, f"Добавил информацию в info_info ")
         else:
             await msg.answer(f"Что-то не так с данными :(")
-        await state.clear()
+        await state.set_state(None)
         return
 
 
@@ -341,15 +344,15 @@ async def view_accident(msg: Message, state: FSMContext):
     info = msg.text.split('|')
     if len(info) != 3:
         await msg.answer(f"Что-то не так с данными :(")
-        await state.clear()
+        await state.set_state(None)
         return
     if info[1] not in status:
         await msg.answer(f"Введён некорректный статус заявки")
-        await state.clear()
+        await state.set_state(None)
         return
     if len(info[2]) < 2:
         await msg.answer(f"Добавьте комментарий")
-        await state.clear()
+        await state.set_state(None)
         return
     else:
         await Repo.update_accident(info)
@@ -362,7 +365,7 @@ async def view_accident(msg: Message, state: FSMContext):
                          f"\nФИО:  {answer.name},  \nТелефон: {answer.phone},"
                          f"\nАбонентский номер:  {answer.subscriber}, \nКомментарий:  {convert(answer.comment)},"
                          f"\nРешение:  {convert(answer.decide)}, \nСтатус заявки:  {answer.status} ")
-        await state.clear()
+        await state.set_state(None)
 
 
 @dp.message(StateFilter(None), Command("view_bs_address"))
@@ -382,23 +385,23 @@ async def select_bs_ad(msg: Message, state: FSMContext):
     """Result search for BS by street"""
     if msg.text is None:
         await msg.answer(f"Некорректные данные :(")
-        await state.clear()
+        await state.set_state(None)
         return
     else:
         street = msg.text.strip()
         if street in lists.block_word:
             await msg.answer(f" Некорректный запрос ")
-            await state.clear()
+            await state.set_state(None)
             return
         answer = await Repo.select_bs_address(street)
         if answer is not None:
             for row in answer:
                 await msg.answer(f"\n{row.number} \n{row.address} \n{row.comment}  ")
                 await Repo.insert_into_visited_date(Registred.name, f"Посмотрел данные по БС {row.number}")
-            await state.clear()
+            await state.set_state(None)
         if answer is None:
             await msg.answer(text=f"Нет такой БС :(")
-            await state.clear()
+            await state.set_state(None)
             return
         return
 
@@ -420,13 +423,13 @@ async def select_action_user(msg: Message, state: FSMContext):
     """Result latest user requests"""
     if msg.text is None:
         await msg.answer(f"Некорректные данные :(")
-        await state.clear()
+        await state.set_state(None)
         return
     else:
         number = msg.text
         if int(number) > 15:
             await msg.answer(f"{number} > 15, попробуй ещё раз :)")
-            await state.clear()
+            await state.set_state(None)
             return
         answer = await Repo.select_action(number)
         l = []
@@ -434,7 +437,7 @@ async def select_action_user(msg: Message, state: FSMContext):
             l.append(f"{row.login}, {row.action}, {row.date}")
         for row in l:
             await msg.answer(f"{row}")
-        await state.clear()
+        await state.set_state(None)
     return
 
 
@@ -456,6 +459,7 @@ async def view_man(message: types.Message, state: FSMContext):
 
 
 @dp.callback_query(lambda c: c.data.startswith("manual:"), token_required)
+@token_required
 async def send_manual_value(callback: types.CallbackQuery, state: FSMContext):
     manual_name = callback.data[len("manual:"):]
     data = await state.get_data()
@@ -496,7 +500,6 @@ async def view_accident(message: types.Message, state: FSMContext):
     )
 
 @dp.callback_query(lambda c: c.data.startswith("accident:"))
-@token_required
 async def view_status_accident(callback: types.CallbackQuery, state: FSMContext):
     """View accident by status."""
     type_of_accident = callback.data.split(":")[1]
@@ -545,14 +548,14 @@ async def insert_accident_number(msg: Message, state: FSMContext):
     """Result search accident by number."""
     if msg.text is None:
         await msg.answer(f"Что-то не то с данными :(")
-        await state.clear()
+        await state.set_state(None)
         return
     else:
         number = msg.text.strip()
         answer = await Repo.select_accident_number(number)
         if answer is None:
             await msg.answer(text=f"Неверный номер :(")
-            await state.clear()
+            await state.set_state(None)
             return
         await msg.answer(f"Номер:  {answer.number}, \nКатегория:  {answer.category}, "
                          f"\nСрок ликвидации:  {answer.sla}, \nВремя открытия:  {answer.datetime_open},"
@@ -561,9 +564,9 @@ async def insert_accident_number(msg: Message, state: FSMContext):
                          f"\nФИО:  {answer.name},  \nТелефон: +{answer.phone},"
                          f"\nАбонентский номер:  {answer.subscriber}, \nКомментарий:  {convert(answer.comment)},"
                          f"\nРешение:  {convert(answer.decide)}, \nСтатус заявки:  {answer.status} ")
-        await state.clear()
+        await state.set_state(None)
         await Repo.insert_into_visited_date(Registred.name, f"посмотрел данные по инциденту - {number}")
-        await state.clear()
+        await state.set_state(None)
         return
 
 
@@ -600,6 +603,96 @@ async def send_chart(callback: types.CallbackQuery, state: FSMContext):
             await callback.message.answer_photo(photo)
     finally:
         os.remove(chart_path)
+
+
+@dp.message(StateFilter(None), Command("view_key"))
+@token_required
+async def view_key(msg: Message, state: FSMContext):
+    """Search for info about key"""
+    data = await state.get_data()
+    await msg.answer(
+        text=f"адрес через запятую с пробелом ",
+        reply_markup=keyboards.make_row_keyboard(["Гомель, Головацкого, 111"])
+    )
+    await state.set_state(SelectInfo.view_key)
+
+
+@dp.message(SelectInfo.view_key)
+async def answer_view_key(msg: Message, state: FSMContext):
+    """Result key."""
+    if msg.text is None:
+        await msg.answer(f"Некорректные данные :(")
+        await state.set_state(None)
+        return
+    else:
+        temps = msg.text.split(", ")
+        if len(temps) != 3:
+            await msg.answer(f"Некорректные данные  :(")
+            await state.set_state(None)
+            return
+        else:
+            key = await Repo.search_key(temps[0], temps[1], temps[2])
+            if key is None:
+                await msg.answer(text=f"что то не то с адресом :(")
+                await state.set_state(None)
+            else:
+                await msg.answer(f"Город: {key.city} \n "
+                                 f"Улица: {key.street} \n"
+                                 f" Номер дома: {key.home} \n "
+                                 f"Количество подьездов: {key.entrance} \n "
+                                 f"Ключи индивидуальные: {key.ind} \n " 
+                                 f"Ключи стандартные: {key.stand}\n"
+                                 )
+                await Repo.insert_into_visited_date(Registred.name, f"посмотрел данные по {key.city} "
+                                                                    f"{key.street} {key.home}")
+                await state.set_state(None)
+                return
+
+
+@dp.message(StateFilter(None), Command("view_old"))
+@token_required
+async def view_old_subscribers(msg: Message, state: FSMContext):
+    """Search for info about key"""
+    await msg.answer(
+        text=f"адрес через запятую с пробелом ",
+        reply_markup=keyboards.make_row_keyboard(["Гомель, Телегина, 21"])
+    )
+    await state.set_state(SelectInfo.view_old_subscribers)
+
+
+@dp.message(SelectInfo.view_old_subscribers)
+@token_required
+async def answer_old_subscribers(msg: Message, state: FSMContext):
+    """Result key."""
+    if msg.text is None:
+        await msg.answer(f"Некорректные данные :(")
+        await state.set_state(None)
+        return
+    else:
+        temps = msg.text.split(", ")
+        if len(temps) != 3:
+            await msg.answer(f"Некорректные данные  :(")
+            await state.set_state(None)
+            return
+        else:
+            key = await Repo.search_old_subscribers(temps[0], temps[1], temps[2])
+            if key is None:
+                await msg.answer(text=f"что то не то с адресом :(")
+                await state.set_state(None)
+            else:
+                await msg.answer(f"Выборка за последние 5 лет: ")
+                for row in key:
+                    await msg.answer(f"Дата: {row.date_created.date()} \n "
+                                     f"Город: {row.city} \n "
+                                     f"Улица: {row.street} \n"
+                                     f"Номер дома: {row.home} \n "
+                                     f"Номер квартиры: {row.apartment} \n "
+                                     )
+                await Repo.insert_into_visited_date(Registred.name, f"посмотрел данные по {temps} "
+                                                                    )
+                await state.set_state(None)
+                return
+
 
 # недокументированный запрос(скрыт в lists)
 @dp.message(Command("view_tracks"))
@@ -638,10 +731,11 @@ async def view_tracks(callback: types.CallbackQuery, state: FSMContext):
 @token_required
 async def cmd_logout(message: types.Message, state: FSMContext):
     """exit"""
-    await state.clear()
+    await state.set_state(None)
     tg_id = message.from_user.id
     await Repo.exit_user_bot(tg_id)
     Registred.name = None
+    await state.clear()
     await message.answer("Вы вышли из системы. Чтобы снова войти, используйте /start.")
 
 

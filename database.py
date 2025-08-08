@@ -106,3 +106,13 @@ class DAddInfo(Model):
     cable_2 = Column(Integer)
     cable_3 = Column(Integer)
     connector = Column(Integer)
+
+
+class DKey(Model):
+    __tablename__ = "key_key"
+    city = Column(String(20))
+    street = Column(String(30))
+    home = Column(String(7))
+    entrance = Column(String(5))
+    ind = Column(String(2))
+    stand = Column(String(2))

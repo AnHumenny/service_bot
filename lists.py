@@ -15,8 +15,10 @@ helps = [
         "/view_accident_number - посмотреть инциденты номеру\n",
         "/update_accident - обновить инцидент по номеру\n",
         "/charts - графики\n",
-        "/view_tracks - трассы\n",
-     #   "/view_stat - посмотреть статистику\n",
+        # "/view_tracks - трассы\n",
+        "/view_key - ключи\n",
+        "/view_stat - посмотреть статистику\n",
+        "/view_old - выборка за последние 5 лет\n"
         "/exit - выход",
         ]
 

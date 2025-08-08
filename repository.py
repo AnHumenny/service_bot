@@ -1,7 +1,7 @@
 from datetime import datetime
 from sqlalchemy import select, insert, update, and_
 from database import (DGazprom, DManual, DUser, DVisitedUser, DBaseStation,
-                      DAllInfo, DAccident, DAddInfo, new_session)
+                      DAllInfo, DAccident, DAddInfo, new_session, DKey)
 
 class Repo:
     @classmethod
@@ -188,6 +188,32 @@ class Repo:
             result = await session.execute(query)
             answer = result.scalars().all()
             return answer
+
+    @classmethod
+    async def search_key(cls, city, street, home):
+        """search_key"""
+        # print("city, street, home", city, street, home)
+        """Select status of accident."""
+        async with new_session() as session:
+            q = select(DKey).where(and_(DKey.city == city, DKey.street == street, DKey.home == home))
+            result = await session.execute(q)
+            answer = result.scalars().first()
+            if answer is None:
+                return None
+            return answer
+
+    @classmethod
+    async def search_old_subscribers(cls, city, street, home):
+        """search_old_subscribers"""
+        async with new_session() as session:
+            q = select(
+                DAddInfo.date_created, DAddInfo.city, DAddInfo.street, DAddInfo.home, DAddInfo.apartment).where(
+                and_(DAddInfo.city == city, DAddInfo.street == street, DAddInfo.home == home,
+                )
+            )
+            result = await session.execute(q)
+            rows = result.all()
+            return rows
 
     @classmethod
     async def exit_user_bot(cls, tg_id):
